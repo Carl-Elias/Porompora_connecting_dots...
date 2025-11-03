@@ -11,6 +11,10 @@ router.get("/", relationshipController.getRelationships);
 router.get("/tree", relationshipController.getFamilyTree);
 router.get("/:relationshipId", relationshipController.getRelationship);
 router.post("/", relationshipController.createRelationship);
+router.post(
+  "/fix-sibling-relationships",
+  relationshipController.fixExistingSiblingRelationships
+);
 router.put("/:relationshipId", relationshipController.updateRelationship);
 router.delete("/:relationshipId", relationshipController.deleteRelationship);
 

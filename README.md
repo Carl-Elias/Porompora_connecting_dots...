@@ -8,23 +8,27 @@ A beautiful, interactive family tree and genealogy platform that helps preserve 
 ![MongoDB](https://img.shields.io/badge/MongoDB-Latest-green)
 
 ## ✨ Vision
+
 Enable families worldwide to preserve their heritage beyond the typical 3-4 generations we usually remember, creating a lasting digital legacy for future generations.
 
 ## 🎯 Features
 
 ### 🎨 Modern UI/UX
+
 - **Glass Morphism Design** - Beautiful, modern interface with backdrop blur effects
-- **Interactive Family Tree** - Drag-and-drop nodes with smooth animations  
+- **Interactive Family Tree** - Drag-and-drop nodes with smooth animations
 - **Multiple Layout Modes** - Tree, Generational, and Circular views
 - **Responsive Design** - Works seamlessly on desktop and mobile devices
 
 ### 👥 Family Management
+
 - **Smart Relationship Mapping** - Intelligent relationship calculations
 - **Visual Connections** - Clear relationship lines with labels
 - **Real-time Updates** - Instant tree refresh when adding relationships
 - **Privacy Controls** - Control information sharing and visibility
 
 ### 🌐 Heritage Preservation
+
 - **Multi-generational Support** - Preserve family history across generations
 - **Public Family Database** - Discover connections with distant relatives
 - **Connection Requests** - Connect with other families sharing heritage
@@ -33,6 +37,7 @@ Enable families worldwide to preserve their heritage beyond the typical 3-4 gene
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js (v18 or higher)
 - MongoDB (local or cloud instance)
 - npm or yarn package manager
@@ -40,12 +45,14 @@ Enable families worldwide to preserve their heritage beyond the typical 3-4 gene
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/yourusername/porompora-connecting-dots.git
    cd porompora-connecting-dots
    ```
 
 2. **Setup Server**
+
    ```bash
    cd server
    npm install
@@ -55,6 +62,7 @@ Enable families worldwide to preserve their heritage beyond the typical 3-4 gene
    ```
 
 3. **Setup Client**
+
    ```bash
    cd ../client
    npm install
@@ -66,12 +74,14 @@ Enable families worldwide to preserve their heritage beyond the typical 3-4 gene
    - Backend API: http://localhost:3001
 
 ## Tech Stack
+
 - **Frontend**: React + React Flow (family tree visualization)
 - **Backend**: Node.js + Express
 - **Database**: MongoDB
 - **Authentication**: JWT
 
 ## Project Structure
+
 ```
 porompora/
 ├── client/          # React frontend
@@ -81,6 +91,7 @@ porompora/
 ```
 
 ## Getting Started
+
 1. Clone the repository
 2. Install dependencies for both client and server
 3. Set up MongoDB database
@@ -88,6 +99,7 @@ porompora/
 5. Run development servers
 
 ## Development Roadmap
+
 - [x] Project Setup & Architecture
 - [ ] Database Schema Design
 - [ ] User Authentication System
@@ -98,4 +110,5 @@ porompora/
 - [ ] Advanced Relationship Logic
 
 ---
-*Building families, one connection at a time* 💝
+
+_Building families, one connection at a time_ 💝
