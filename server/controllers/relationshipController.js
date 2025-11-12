@@ -1,5 +1,9 @@
 const Relationship = require("../models/Relationship");
 const Person = require("../models/Person");
+const {
+  getInverseRelationship,
+  getRelationshipDisplayName,
+} = require("../utils/relationshipHelpers");
 
 // Get all relationships for the authenticated user's family
 const getRelationships = async (req, res) => {
@@ -309,6 +313,7 @@ const getFamilyTree = async (req, res) => {
     );
 
     // Get all connected family members (including those from other users)
+    // RECURSIVELY expand to include all connected persons through relationship chains
     const allConnectedPersonIds = new Set();
     familyMembers.forEach((p) => allConnectedPersonIds.add(p._id.toString()));
 
@@ -317,10 +322,86 @@ const getFamilyTree = async (req, res) => {
       allConnectedPersonIds.add(rel.person2._id.toString());
     });
 
+    // Iteratively expand: keep fetching relationships of newly found persons
+    // until no new persons are discovered (reaches all descendants/ancestors)
+    let previousSize = 0;
+    let currentSize = allConnectedPersonIds.size;
+    let iterations = 0;
+    const maxIterations = 20; // Safety limit to prevent infinite loops
+
+    console.log(`🔍 Starting recursive person discovery...`);
+    console.log(`📊 Initial connected persons: ${currentSize}`);
+
+    while (previousSize < currentSize && iterations < maxIterations) {
+      previousSize = currentSize;
+      iterations++;
+
+      // Find all relationships involving currently known persons
+      const expandedRelationships = await Relationship.find({
+        $or: [
+          { person1: { $in: Array.from(allConnectedPersonIds) } },
+          { person2: { $in: Array.from(allConnectedPersonIds) } },
+        ],
+        isActive: true,
+      }).populate(
+        "person1 person2",
+        "firstName lastName gender dateOfBirth addedBy"
+      );
+
+      // Add any newly discovered persons
+      expandedRelationships.forEach((rel) => {
+        allConnectedPersonIds.add(rel.person1._id.toString());
+        allConnectedPersonIds.add(rel.person2._id.toString());
+      });
+
+      currentSize = allConnectedPersonIds.size;
+      console.log(
+        `🔄 Iteration ${iterations}: Found ${currentSize} persons (+${
+          currentSize - previousSize
+        } new)`
+      );
+    }
+
+    console.log(
+      `✅ Discovery complete after ${iterations} iterations: ${currentSize} total persons`
+    );
+
     // Fetch all connected persons (including cross-user ones)
     const allConnectedPersons = await Person.find({
       _id: { $in: Array.from(allConnectedPersonIds) },
     });
+
+    console.log(
+      `👥 Connected person IDs: ${Array.from(allConnectedPersonIds).length}`
+    );
+    console.log(`👥 Fetched connected persons: ${allConnectedPersons.length}`);
+    console.log(
+      `👥 Person names:`,
+      allConnectedPersons.map((p) => p.firstName + " " + p.lastName).join(", ")
+    );
+
+    // NOW fetch ALL relationships between ALL connected persons
+    // This ensures we get all relationships across the entire family tree
+    const allRelationships = await Relationship.find({
+      $or: [
+        { person1: { $in: Array.from(allConnectedPersonIds) } },
+        { person2: { $in: Array.from(allConnectedPersonIds) } },
+      ],
+      isActive: true,
+    }).populate(
+      "person1 person2",
+      "firstName lastName gender dateOfBirth addedBy"
+    );
+
+    console.log(`📋 Initial relationships: ${relationships.length}`);
+    console.log(
+      `📋 All relationships (including cross-user): ${allRelationships.length}`
+    );
+
+    console.log(`📋 Initial relationships: ${relationships.length}`);
+    console.log(
+      `📋 All relationships (including cross-user): ${allRelationships.length}`
+    );
 
     // Determine the central node (prefer rootPersonId or user's first family member)
     let centralPersonId = rootPersonId;
@@ -328,10 +409,18 @@ const getFamilyTree = async (req, res) => {
       centralPersonId = familyMembers[0]._id.toString();
     }
 
-    // Build tree structure with all connected persons
+    console.log(`\n=== FAMILY TREE GENERATION ===`);
+    console.log(`Central Person ID: ${centralPersonId}`);
+    console.log(`Total family members (user's own): ${familyMembers.length}`);
+    console.log(
+      `Total connected persons (including others): ${allConnectedPersons.length}`
+    );
+    console.log(`Total relationships: ${allRelationships.length}`);
+
+    // Build tree structure with all connected persons and ALL their relationships
     const treeData = buildFamilyTree(
       allConnectedPersons,
-      relationships,
+      allRelationships, // Use ALL relationships, not just user's
       centralPersonId,
       userId
     );
@@ -340,7 +429,7 @@ const getFamilyTree = async (req, res) => {
       success: true,
       data: {
         familyMembers: allConnectedPersons, // Include all connected persons
-        relationships,
+        relationships: allRelationships, // Return ALL relationships
         treeStructure: treeData,
         currentUserId: userId, // Send current user ID for frontend highlighting
         centralPersonId: centralPersonId, // Send central person ID
@@ -1050,12 +1139,13 @@ function buildFamilyTree(
   });
 
   // Calculate hierarchical positions with improved layout
-  const positions = calculateImprovedHierarchicalPositions(
-    familyMembers,
-    relationships,
-    rootPersonId || familyMembers[0]?._id?.toString(),
-    currentUserId
-  );
+  const { positions, generations: generationData } =
+    calculateImprovedHierarchicalPositions(
+      familyMembers,
+      relationships,
+      rootPersonId || familyMembers[0]?._id?.toString(),
+      currentUserId
+    );
 
   // Create nodes with calculated positions and highlighting
   const nodes = familyMembers.map((person) => {
@@ -1070,6 +1160,212 @@ function buildFamilyTree(
       person.addedBy.toString() === currentUserId.toString();
     const isCentralNode = personId === rootPersonId;
 
+    const generation = generationData[personId] || 0;
+
+    // Calculate relationship to central person
+    let relationshipToCentral = null;
+    let relationshipDisplayName = null;
+
+    if (isCentralNode) {
+      relationshipToCentral = "self";
+      relationshipDisplayName = "You";
+    } else if (rootPersonId) {
+      // Find direct relationship between this person and central person
+      const relToCentral = relationships.find((rel) => {
+        const p1 = rel.person1._id.toString();
+        const p2 = rel.person2._id.toString();
+        return (
+          (p1 === personId && p2 === rootPersonId) ||
+          (p1 === rootPersonId && p2 === personId)
+        );
+      });
+
+      if (relToCentral) {
+        // Direct relationship exists - use it
+        if (relToCentral.person1._id.toString() === rootPersonId) {
+          const inverseType = getInverseRelationship(
+            relToCentral.relationshipType,
+            person.gender,
+            relToCentral.person1.gender
+          );
+          relationshipToCentral = inverseType;
+          relationshipDisplayName = `Your ${getRelationshipDisplayName(
+            inverseType,
+            person.gender
+          )}`;
+        } else {
+          relationshipToCentral = relToCentral.relationshipType;
+          relationshipDisplayName = `Your ${getRelationshipDisplayName(
+            relToCentral.relationshipType,
+            person.gender
+          )}`;
+        }
+      } else {
+        // No direct relationship - infer from generation and relationship path
+        // Check if this person is directly connected via parent/child edge
+        const isDirectParent = relationships.some((rel) => {
+          const isParentRel = rel.relationshipType === "parent";
+          const p1 = rel.person1._id.toString();
+          const p2 = rel.person2._id.toString();
+          // Check if person is parent of central person
+          return isParentRel && p1 === personId && p2 === rootPersonId;
+        });
+
+        const isDirectChild = relationships.some((rel) => {
+          const isParentRel = rel.relationshipType === "parent";
+          const p1 = rel.person1._id.toString();
+          const p2 = rel.person2._id.toString();
+          // Check if central person is parent of this person
+          return isParentRel && p1 === rootPersonId && p2 === personId;
+        });
+
+        // Positive generation = descendants, negative = ancestors
+        if (generation > 0) {
+          // Descendant
+          if (generation === 1) {
+            if (isDirectChild) {
+              // Direct child
+              relationshipToCentral = "child";
+              relationshipDisplayName =
+                person.gender === "male"
+                  ? "Your Son"
+                  : person.gender === "female"
+                  ? "Your Daughter"
+                  : "Your Child";
+            } else {
+              // Niece/Nephew (child of sibling)
+              relationshipToCentral = "niece_nephew";
+              relationshipDisplayName =
+                person.gender === "male"
+                  ? "Your Nephew"
+                  : person.gender === "female"
+                  ? "Your Niece"
+                  : "Your Niece/Nephew";
+            }
+          } else if (generation === 2) {
+            relationshipToCentral = "grandchild";
+            relationshipDisplayName =
+              person.gender === "male"
+                ? "Your Grandson"
+                : person.gender === "female"
+                ? "Your Granddaughter"
+                : "Your Grandchild";
+          } else if (generation === 3) {
+            relationshipToCentral = "great_grandchild";
+            relationshipDisplayName = "Your Great-Grandchild";
+          } else if (generation >= 4) {
+            // Handle multiple greats (great-great-grandchild, etc.)
+            const greats = "Great-".repeat(generation - 2);
+            relationshipToCentral = "great_grandchild";
+            relationshipDisplayName = `Your ${greats}Grandchild`;
+          }
+        } else if (generation < 0) {
+          // Ancestor
+          const absGen = Math.abs(generation);
+          if (absGen === 1) {
+            if (isDirectParent) {
+              // Direct parent
+              relationshipToCentral = "parent";
+              relationshipDisplayName =
+                person.gender === "male"
+                  ? "Your Father"
+                  : person.gender === "female"
+                  ? "Your Mother"
+                  : "Your Parent";
+            } else {
+              // Uncle/Aunt (sibling of parent)
+              relationshipToCentral = "uncle_aunt";
+              relationshipDisplayName =
+                person.gender === "male"
+                  ? "Your Uncle"
+                  : person.gender === "female"
+                  ? "Your Aunt"
+                  : "Your Uncle/Aunt";
+            }
+          } else if (absGen === 2) {
+            relationshipToCentral = "grandparent";
+            relationshipDisplayName =
+              person.gender === "male"
+                ? "Your Grandfather"
+                : person.gender === "female"
+                ? "Your Grandmother"
+                : "Your Grandparent";
+          } else if (absGen === 3) {
+            relationshipToCentral = "great_grandparent";
+            relationshipDisplayName = "Your Great-Grandparent";
+          } else if (absGen >= 4) {
+            const greats = "Great-".repeat(absGen - 2);
+            relationshipToCentral = "great_grandparent";
+            relationshipDisplayName = `Your ${greats}Grandparent`;
+          }
+        } else {
+          // Same generation - could be spouse, sibling, or cousin
+          // Check if this person shares the same parent with central person
+
+          // Find central person's parents
+          // Check both "parent" type (person1 is parent of person2) and "child" type (person1 is child of person2)
+          const centralPersonParents = relationships
+            .filter((rel) => {
+              const p1 = rel.person1._id.toString();
+              const p2 = rel.person2._id.toString();
+              // Case 1: relationshipType === "parent" and p2 is central person (p1 is parent)
+              // Case 2: relationshipType === "child" and p1 is central person (p2 is parent)
+              return (
+                (rel.relationshipType === "parent" && p2 === rootPersonId) ||
+                (rel.relationshipType === "child" && p1 === rootPersonId)
+              );
+            })
+            .map((rel) => {
+              // If parent type, person1 is the parent
+              // If child type, person2 is the parent
+              return rel.relationshipType === "parent"
+                ? rel.person1._id.toString()
+                : rel.person2._id.toString();
+            });
+
+          // Find this person's parents
+          const thisPersonParents = relationships
+            .filter((rel) => {
+              const p1 = rel.person1._id.toString();
+              const p2 = rel.person2._id.toString();
+              return (
+                (rel.relationshipType === "parent" && p2 === personId) ||
+                (rel.relationshipType === "child" && p1 === personId)
+              );
+            })
+            .map((rel) => {
+              return rel.relationshipType === "parent"
+                ? rel.person1._id.toString()
+                : rel.person2._id.toString();
+            });
+
+          // Check if they share at least one parent
+          const shareParent = centralPersonParents.some((parentId) =>
+            thisPersonParents.includes(parentId)
+          );
+
+          if (shareParent) {
+            // Direct sibling (shares same parent)
+            relationshipToCentral = "sibling";
+            relationshipDisplayName =
+              person.gender === "male"
+                ? "Your Brother"
+                : person.gender === "female"
+                ? "Your Sister"
+                : "Your Sibling";
+          } else {
+            // Cousin (same generation but different parents)
+            relationshipToCentral = "cousin";
+            relationshipDisplayName = "Your Cousin";
+          }
+        }
+      }
+    }
+
+    console.log(
+      `Node: ${person.firstName} ${person.lastName} -> Generation: ${generation}, Relationship: ${relationshipDisplayName}`
+    );
+
     return {
       id: personId,
       data: {
@@ -1077,68 +1373,105 @@ function buildFamilyTree(
         person: person,
         isCurrentUserFamily: isCurrentUserFamily,
         isCentralNode: isCentralNode,
+        generation: generation,
+        relationshipToCentral: relationshipToCentral,
+        relationshipDisplayName: relationshipDisplayName,
       },
       position: position,
     };
   });
 
   // Create edges with classic family tree styling
-  const edges = relationships.map((rel) => {
-    const relationshipType = rel.relationshipType;
-    let edgeStyle = {};
-    let edgeType = "straight"; // Use straight lines for classic family tree look
+  // ONLY create edges where BOTH people exist in familyMembers
+  const validPersonIds = new Set(familyMembers.map((p) => p._id.toString()));
 
-    // Style edges based on relationship type for classic family tree
-    switch (relationshipType) {
-      case "parent":
-      case "child":
-        edgeStyle = {
-          stroke: "#2563EB", // Blue for parent-child relationships
-          strokeWidth: 3,
-        };
-        break;
-      case "spouse":
-        edgeStyle = {
-          stroke: "#DC2626", // Red for spouse relationships
-          strokeWidth: 3,
-        };
-        edgeType = "straight"; // Horizontal line for spouses
-        break;
-      case "sibling":
-        edgeStyle = {
-          stroke: "#7C3AED", // Purple for siblings
-          strokeWidth: 2,
-          strokeDasharray: "8,4", // Dashed line for siblings
-        };
-        break;
-      default:
-        edgeStyle = {
-          stroke: "#6B7280",
-          strokeWidth: 2,
-        };
-    }
+  const edges = relationships
+    .filter((rel) => {
+      const person1Id = rel.person1._id.toString();
+      const person2Id = rel.person2._id.toString();
+      const isValid =
+        validPersonIds.has(person1Id) && validPersonIds.has(person2Id);
 
-    return {
-      id: rel._id.toString(),
-      source: rel.person1._id.toString(),
-      target: rel.person2._id.toString(),
-      label: relationshipType,
-      style: edgeStyle,
-      type: edgeType,
-      animated: false, // No animation for classic look
-      data: {
-        relationship: rel,
-      },
-    };
-  });
+      if (!isValid) {
+        console.log(
+          `⚠️ Skipping edge: ${person1Id} -> ${person2Id} (${rel.relationshipType}) - missing person`
+        );
+      } else {
+        console.log(
+          `✅ Including edge: ${person1Id} -> ${person2Id} (${rel.relationshipType})`
+        );
+      }
+
+      return isValid;
+    })
+    .map((rel) => {
+      const relationshipType = rel.relationshipType;
+      let edgeStyle = {};
+      let edgeType = "straight"; // Use straight lines for classic family tree look
+
+      // Determine source and target based on relationship type
+      let source = rel.person1._id.toString();
+      let target = rel.person2._id.toString();
+
+      // For "child" relationship, person1 is child of person2, so reverse the edge direction
+      if (relationshipType === "child") {
+        source = rel.person2._id.toString();
+        target = rel.person1._id.toString();
+      }
+
+      // Style edges based on relationship type for classic family tree
+      switch (relationshipType) {
+        case "parent":
+        case "child":
+          edgeStyle = {
+            stroke: "#2563EB", // Blue for parent-child relationships
+            strokeWidth: 3,
+          };
+          break;
+        case "spouse":
+          edgeStyle = {
+            stroke: "#DC2626", // Red for spouse relationships
+            strokeWidth: 3,
+          };
+          edgeType = "straight"; // Horizontal line for spouses
+          break;
+        case "sibling":
+          edgeStyle = {
+            stroke: "#7C3AED", // Purple for siblings
+            strokeWidth: 2,
+            strokeDasharray: "8,4", // Dashed line for siblings
+          };
+          break;
+        default:
+          edgeStyle = {
+            stroke: "#6B7280",
+            strokeWidth: 2,
+          };
+      }
+
+      return {
+        id: rel._id.toString(),
+        source: source,
+        target: target,
+        label: relationshipType === "child" ? "parent" : relationshipType, // Normalize child to parent for frontend
+        style: edgeStyle,
+        type: edgeType,
+        animated: false, // No animation for classic look
+        data: {
+          relationship: rel,
+        },
+      };
+    });
+
+  console.log(
+    `✅ Created ${edges.length} valid edges out of ${relationships.length} total relationships`
+  );
 
   return {
     nodes,
     edges,
   };
-}
-
-// Calculate structured family tree positions (classic tree layout)
+} // Calculate structured family tree positions (classic tree layout)
 function calculateImprovedHierarchicalPositions(
   familyMembers,
   relationships,
@@ -1146,6 +1479,7 @@ function calculateImprovedHierarchicalPositions(
   currentUserId
 ) {
   const positions = {};
+  const generations = {}; // Store generation for each person
   const graph = new Map();
 
   // Initialize graph with all people
@@ -1164,16 +1498,24 @@ function calculateImprovedHierarchicalPositions(
   relationships.forEach((rel) => {
     const person1Id = rel.person1._id.toString();
     const person2Id = rel.person2._id.toString();
+    const person1Name = rel.person1.firstName;
+    const person2Name = rel.person2.firstName;
 
     if (graph.has(person1Id) && graph.has(person2Id)) {
       switch (rel.relationshipType) {
         case "parent":
           graph.get(person1Id).children.push(person2Id);
           graph.get(person2Id).parents.push(person1Id);
+          console.log(
+            `📊 Relationship: ${person1Name} (parent) → ${person2Name} (child)`
+          );
           break;
         case "child":
           graph.get(person1Id).parents.push(person2Id);
           graph.get(person2Id).children.push(person1Id);
+          console.log(
+            `📊 Relationship: ${person2Name} (parent) → ${person1Name} (child)`
+          );
           break;
         case "spouse":
           graph.get(person1Id).spouses.push(person2Id);
@@ -1195,12 +1537,18 @@ function calculateImprovedHierarchicalPositions(
       ?._id?.toString() ||
     familyMembers[0]?._id?.toString();
 
-  if (!centralPersonId) return positions;
+  if (!centralPersonId) return { positions, generations };
+
+  const centralPerson = graph.get(centralPersonId)?.person;
+  console.log(
+    `\n🎯 Central person for generation calc: ${centralPerson?.firstName} ${centralPerson?.lastName} (ID: ${centralPersonId})`
+  );
 
   // Calculate generations relative to central person
   const visited = new Set();
   const queue = [{ personId: centralPersonId, generation: 0 }];
   graph.get(centralPersonId).generation = 0;
+  generations[centralPersonId] = 0; // Store generation for later
   visited.add(centralPersonId);
 
   while (queue.length > 0) {
@@ -1212,6 +1560,7 @@ function calculateImprovedHierarchicalPositions(
       person.parents.forEach((parentId) => {
         if (!visited.has(parentId)) {
           graph.get(parentId).generation = generation - 1;
+          generations[parentId] = generation - 1; // Store generation
           visited.add(parentId);
           queue.push({ personId: parentId, generation: generation - 1 });
         }
@@ -1221,6 +1570,7 @@ function calculateImprovedHierarchicalPositions(
       person.children.forEach((childId) => {
         if (!visited.has(childId)) {
           graph.get(childId).generation = generation + 1;
+          generations[childId] = generation + 1; // Store generation
           visited.add(childId);
           queue.push({ personId: childId, generation: generation + 1 });
         }
@@ -1230,6 +1580,7 @@ function calculateImprovedHierarchicalPositions(
       person.spouses.forEach((spouseId) => {
         if (!visited.has(spouseId)) {
           graph.get(spouseId).generation = generation;
+          generations[spouseId] = generation; // Store generation
           visited.add(spouseId);
           queue.push({ personId: spouseId, generation });
         }
@@ -1239,6 +1590,7 @@ function calculateImprovedHierarchicalPositions(
       person.siblings.forEach((siblingId) => {
         if (!visited.has(siblingId)) {
           graph.get(siblingId).generation = generation;
+          generations[siblingId] = generation; // Store generation
           visited.add(siblingId);
           queue.push({ personId: siblingId, generation });
         }
@@ -1246,14 +1598,14 @@ function calculateImprovedHierarchicalPositions(
     }
   }
 
-  // Group people by generation
-  const generations = new Map();
+  // Group people by generation for layout
+  const generationGroups = new Map();
   graph.forEach((person, personId) => {
     const gen = person.generation;
-    if (!generations.has(gen)) {
-      generations.set(gen, []);
+    if (!generationGroups.has(gen)) {
+      generationGroups.set(gen, []);
     }
-    generations.get(gen).push(personId);
+    generationGroups.get(gen).push(personId);
   });
 
   // Layout configuration
@@ -1263,7 +1615,7 @@ function calculateImprovedHierarchicalPositions(
   const centerY = 400; // Center point of the tree
 
   // Position each generation
-  generations.forEach((peopleInGeneration, generation) => {
+  generationGroups.forEach((peopleInGeneration, generation) => {
     const y = centerY + generation * generationHeight;
 
     // Group spouses together and arrange families
@@ -1294,7 +1646,7 @@ function calculateImprovedHierarchicalPositions(
     });
   });
 
-  return positions;
+  return { positions, generations }; // Return both positions and generations
 }
 
 // Helper function to group people into families (spouses together)

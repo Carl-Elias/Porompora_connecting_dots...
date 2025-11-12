@@ -93,6 +93,9 @@ export interface FamilyTreeNode {
     person: Person;
     isCurrentUserFamily?: boolean;
     isCentralNode?: boolean;
+    generation?: number; // Generation relative to central person (0 = central, -1 = parents, +1 = children)
+    relationshipToCentral?: string | null; // Relationship type to central person
+    relationshipDisplayName?: string | null; // Display name like "Your Father", "Your Son"
   };
   position: { x: number; y: number };
   type?: string;

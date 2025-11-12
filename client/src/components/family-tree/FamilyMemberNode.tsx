@@ -9,6 +9,8 @@ interface FamilyMemberNodeProps {
     label: string;
     isCurrentUserFamily?: boolean;
     isCentralNode?: boolean;
+    relationshipToCentral?: string | null;
+    relationshipDisplayName?: string | null;
   };
   isConnectable: boolean;
   selected?: boolean;
@@ -19,7 +21,12 @@ const FamilyMemberNode: React.FC<FamilyMemberNodeProps> = ({
   isConnectable,
   selected,
 }) => {
-  const { person, isCurrentUserFamily = false, isCentralNode = false } = data;
+  const {
+    person,
+    isCurrentUserFamily = false,
+    isCentralNode = false,
+    relationshipDisplayName = null,
+  } = data;
   const [isHovered, setIsHovered] = useState(false);
 
   const getAgeFromBirthDate = (birthDate: string) => {
@@ -69,19 +76,16 @@ const FamilyMemberNode: React.FC<FamilyMemberNodeProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Connection Handles */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="w-3 h-3 border-2 border-white"
-        style={{
-          background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-          boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
-        }}
-        isConnectable={isConnectable}
-      />
-
       <div className="text-center relative">
+        {/* Relationship Badge */}
+        {relationshipDisplayName && (
+          <div className="mb-3 -mt-2">
+            <div className="inline-flex items-center justify-center px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-semibold rounded-full shadow-md">
+              {relationshipDisplayName}
+            </div>
+          </div>
+        )}
+
         {/* Profile Picture Section */}
         <div className="relative mx-auto w-16 h-16 mb-3 group">
           <div
@@ -186,13 +190,28 @@ const FamilyMemberNode: React.FC<FamilyMemberNodeProps> = ({
         )}
       </div>
 
+      {/* Connection handles for ReactFlow edges */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="top"
+        style={{
+          background: "#6366f1",
+          width: "8px",
+          height: "8px",
+          border: "2px solid white",
+        }}
+        isConnectable={isConnectable}
+      />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="w-3 h-3 border-2 border-white"
+        id="bottom"
         style={{
-          background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-          boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
+          background: "#6366f1",
+          width: "8px",
+          height: "8px",
+          border: "2px solid white",
         }}
         isConnectable={isConnectable}
       />

@@ -35,80 +35,348 @@ const nodeTypes: NodeTypes = {
 };
 
 // Layout calculation functions
-const calculateTreeLayout = (nodes: any[], viewMode: string) => {
+const calculateTreeLayout = (
+  nodes: any[],
+  viewMode: string,
+  edges: any[] = []
+) => {
   switch (viewMode) {
     case "tree":
-      return calculateHierarchicalLayout(nodes);
+      return calculateHierarchicalLayout(nodes, edges);
     case "generation":
-      return calculateGenerationalLayout(nodes);
+      return calculateGenerationalLayout(nodes, edges);
     case "circular":
       return calculateCircularLayout(nodes);
     default:
-      return calculateHierarchicalLayout(nodes);
+      return calculateHierarchicalLayout(nodes, edges);
   }
 };
 
-const calculateHierarchicalLayout = (nodes: any[]) => {
-  const layerHeight = 350; // Increased for relationship labels
-  const nodeWidth = 400; // Increased for relationship labels
-  const startX = 120; // Start further from edge
-  const startY = 120; // Start further from top
+const calculateHierarchicalLayout = (nodes: any[], edges: any[] = []) => {
+  const layerHeight = 300; // Vertical spacing between generations (increased more)
+  const minNodeSpacing = 350; // Minimum horizontal spacing between nodes (increased more)
+  const startY = 50;
 
-  console.log("Calculating hierarchical layout for nodes:", nodes.length); // Debug log
+  console.log("=== HIERARCHICAL LAYOUT ===");
+  console.log("Calculating hierarchical layout for nodes:", nodes.length);
+  console.log("Edges available:", edges.length);
 
-  return nodes.map((node, index) => {
-    const layer = Math.floor(index / 3); // 3 nodes per layer
-    const positionInLayer = index % 3;
-    const totalInLayer = Math.min(3, nodes.length - layer * 3);
-    const layerStartX = startX + (-(totalInLayer - 1) * nodeWidth) / 2;
+  // Build parent-child map from edges
+  const parentChildMap = new Map<string, string[]>(); // parentId -> [childIds]
+  const childParentMap = new Map<string, string>(); // childId -> parentId
 
-    const position = {
-      x: layerStartX + positionInLayer * nodeWidth,
-      y: startY + layer * layerHeight,
-    };
+  nodes.forEach((node) => {
+    parentChildMap.set(node.id, []);
+  });
+
+  edges.forEach((edge) => {
+    if (edge.label === "parent" || !edge.label) {
+      // edge.source is parent, edge.target is child
+      if (!parentChildMap.has(edge.source)) {
+        parentChildMap.set(edge.source, []);
+      }
+      parentChildMap.get(edge.source)!.push(edge.target);
+      childParentMap.set(edge.target, edge.source);
+    }
+  });
+
+  console.log(
+    "Parent-child relationships:",
+    Array.from(parentChildMap.entries())
+  );
+
+  // Build a map of all nodes by ID
+  const nodeMap = new Map();
+  nodes.forEach((node) => {
+    nodeMap.set(node.id, {
+      ...node,
+      generation: -1,
+      children: [],
+      parents: [],
+    });
+  });
+
+  // For now, use the backend-provided generation data if available
+  // Otherwise, calculate based on simple rules
+  const generations = new Map<number, any[]>();
+
+  nodes.forEach((node) => {
+    // Try to get generation from node data, or default to 0
+    const generation = node.data?.generation ?? 0;
 
     console.log(
-      `Node ${index} (${node.data?.label || node.id}) positioned at:`,
-      position
-    ); // Debug log
+      `Node ${node.data?.label}: generation = ${generation}`,
+      node.data
+    );
 
-    return {
-      ...node,
-      position,
-    };
+    if (!generations.has(generation)) {
+      generations.set(generation, []);
+    }
+    generations.get(generation)!.push(node);
   });
+
+  // If no generation data, fall back to simple layout
+  if (
+    generations.size === 0 ||
+    (generations.size === 1 && generations.has(0))
+  ) {
+    // Simple fallback: distribute nodes evenly
+    const nodesPerRow = 4;
+    return nodes.map((node, index) => {
+      const row = Math.floor(index / nodesPerRow);
+      const col = index % nodesPerRow;
+      const totalInRow = Math.min(
+        nodesPerRow,
+        nodes.length - row * nodesPerRow
+      );
+      const rowStartX = 600 - ((totalInRow - 1) * minNodeSpacing) / 2;
+
+      return {
+        ...node,
+        position: {
+          x: rowStartX + col * minNodeSpacing,
+          y: startY + row * layerHeight,
+        },
+      };
+    });
+  }
+
+  // Layout nodes by generation with parent-child alignment
+  const positionedNodes: any[] = [];
+  const sortedGenerations = Array.from(generations.keys()).sort(
+    (a, b) => a - b // Sort from lowest (ancestors) to highest (descendants)
+  );
+
+  console.log("Sorted generations:", sortedGenerations);
+
+  // Track X positions assigned to each node
+  const xPositions = new Map<string, number>();
+  let generationYPositions = new Map<number, number>();
+
+  // First pass: Assign Y positions to each generation
+  sortedGenerations.forEach((gen, genIndex) => {
+    const yPosition = startY + genIndex * layerHeight;
+    generationYPositions.set(gen, yPosition);
+  });
+
+  // Second pass: Position nodes generation by generation, aligning children under parents
+  sortedGenerations.forEach((gen, genIndex) => {
+    const genNodes = generations.get(gen)!;
+    const yPosition = generationYPositions.get(gen)!;
+
+    console.log(
+      `Generation ${gen} (index ${genIndex}): ${genNodes.length} nodes at Y=${yPosition}`
+    );
+
+    if (genIndex === 0) {
+      // First generation (root/ancestors): center them
+      const totalNodesInGen = genNodes.length;
+      const totalWidth = (totalNodesInGen - 1) * minNodeSpacing;
+      const centerX = 600;
+      const genStartX = centerX - totalWidth / 2;
+
+      genNodes.forEach((node, index) => {
+        const xPos = genStartX + index * minNodeSpacing;
+        xPositions.set(node.id, xPos);
+
+        positionedNodes.push({
+          ...node,
+          position: { x: xPos, y: yPosition },
+        });
+        console.log(`  - ${node.data?.label}: (${xPos}, ${yPosition})`);
+      });
+    } else {
+      // Subsequent generations: position children under their parents
+      // First, group nodes by their parent to avoid overlaps between different families
+      const nodesByParent = new Map<string, any[]>();
+      const nodesWithoutParent: any[] = [];
+
+      genNodes.forEach((node) => {
+        const parentId = childParentMap.get(node.id);
+        if (parentId && xPositions.has(parentId)) {
+          if (!nodesByParent.has(parentId)) {
+            nodesByParent.set(parentId, []);
+          }
+          nodesByParent.get(parentId)!.push(node);
+        } else {
+          nodesWithoutParent.push(node);
+        }
+      });
+
+      // Track occupied X ranges to avoid overlaps
+      const occupiedRanges: Array<{ start: number; end: number }> = [];
+
+      const isOverlapping = (start: number, end: number): boolean => {
+        return occupiedRanges.some(
+          (range) =>
+            (start >= range.start && start <= range.end) ||
+            (end >= range.start && end <= range.end) ||
+            (start <= range.start && end >= range.end)
+        );
+      };
+
+      // Position children for each parent
+      nodesByParent.forEach((children, parentId) => {
+        const parentX = xPositions.get(parentId)!;
+        const totalSiblings = children.length;
+
+        if (totalSiblings === 1) {
+          // Single child: directly under parent
+          const xPos = parentX;
+          const nodeWidth = 250; // Approximate node width
+
+          // Check for overlap and adjust if needed
+          let finalX = xPos;
+          while (
+            isOverlapping(finalX - nodeWidth / 2, finalX + nodeWidth / 2)
+          ) {
+            finalX += 50; // Shift right by 50px
+          }
+
+          xPositions.set(children[0].id, finalX);
+          occupiedRanges.push({
+            start: finalX - nodeWidth / 2,
+            end: finalX + nodeWidth / 2,
+          });
+
+          positionedNodes.push({
+            ...children[0],
+            position: { x: finalX, y: yPosition },
+          });
+          console.log(
+            `  - ${children[0].data?.label}: (${finalX}, ${yPosition}) under parent at ${parentX}`
+          );
+        } else {
+          // Multiple children: distribute them around parent position
+          const siblingSpacing = minNodeSpacing * 0.9; // Increased from 0.8 to 0.9
+          const totalWidth = (totalSiblings - 1) * siblingSpacing;
+          let startX = parentX - totalWidth / 2;
+
+          // Check if this entire group overlaps with existing nodes
+          const nodeWidth = 250;
+          const groupStart = startX - nodeWidth / 2;
+          const groupEnd = startX + totalWidth + nodeWidth / 2;
+
+          if (isOverlapping(groupStart, groupEnd)) {
+            // Find the rightmost occupied position and start after it
+            const maxEnd = Math.max(...occupiedRanges.map((r) => r.end));
+            startX = maxEnd + minNodeSpacing / 2;
+          }
+
+          children.forEach((node, childIndex) => {
+            const xPos = startX + childIndex * siblingSpacing;
+            xPositions.set(node.id, xPos);
+
+            occupiedRanges.push({
+              start: xPos - nodeWidth / 2,
+              end: xPos + nodeWidth / 2,
+            });
+
+            positionedNodes.push({
+              ...node,
+              position: { x: xPos, y: yPosition },
+            });
+            console.log(
+              `  - ${node.data?.label}: (${xPos}, ${yPosition}) under parent at ${parentX}`
+            );
+          });
+        }
+      });
+
+      // Position nodes without parents
+      nodesWithoutParent.forEach((node) => {
+        const nodeWidth = 250;
+        let xPos = 600; // Start at center
+
+        // Find an unoccupied position
+        while (isOverlapping(xPos - nodeWidth / 2, xPos + nodeWidth / 2)) {
+          xPos += minNodeSpacing;
+        }
+
+        xPositions.set(node.id, xPos);
+        occupiedRanges.push({
+          start: xPos - nodeWidth / 2,
+          end: xPos + nodeWidth / 2,
+        });
+
+        positionedNodes.push({
+          ...node,
+          position: { x: xPos, y: yPosition },
+        });
+        console.log(
+          `  - ${node.data?.label}: (${xPos}, ${yPosition}) no parent`
+        );
+      });
+    }
+  });
+
+  console.log("Positioned nodes by generation:", positionedNodes.length);
+  return positionedNodes;
 };
 
-const calculateGenerationalLayout = (nodes: any[]) => {
-  // Group by generation and arrange horizontally
-  const nodeWidth = 400; // Increased for relationship labels
-  const layerHeight = 350; // Increased for relationship labels
-  const startX = 120;
-  const startY = 120;
+const calculateGenerationalLayout = (nodes: any[], edges: any[] = []) => {
+  const minNodeSpacing = 350; // Horizontal spacing (increased more)
+  const layerHeight = 300; // Vertical spacing between generations (increased more)
+  const startY = 50;
 
-  console.log("Calculating generational layout for nodes:", nodes.length); // Debug log
+  console.log("=== GENERATIONAL LAYOUT ===");
+  console.log("Calculating generational layout for nodes:", nodes.length);
 
-  return nodes.map((node, index) => {
-    const position = {
-      x: startX + (index % 4) * nodeWidth,
-      y: startY + Math.floor(index / 4) * layerHeight,
-    };
+  // Group nodes by generation
+  const generations = new Map<number, any[]>();
 
-    console.log(`Generational node ${index} positioned at:`, position); // Debug log
-
-    return {
-      ...node,
-      position,
-    };
+  nodes.forEach((node) => {
+    const generation = node.data?.generation ?? 0;
+    if (!generations.has(generation)) {
+      generations.set(generation, []);
+    }
+    generations.get(generation)!.push(node);
   });
+
+  // Sort generations from ancestors to descendants
+  const sortedGenerations = Array.from(generations.keys()).sort(
+    (a, b) => a - b
+  );
+  console.log("Generations found:", sortedGenerations);
+
+  const positionedNodes: any[] = [];
+
+  sortedGenerations.forEach((gen, genIndex) => {
+    const genNodes = generations.get(gen)!;
+    const yPosition = startY + genIndex * layerHeight;
+
+    // Calculate total width needed and center it
+    const totalWidth = (genNodes.length - 1) * minNodeSpacing;
+    const startX = 600 - totalWidth / 2; // Center horizontally
+
+    console.log(
+      `Generation ${gen}: ${genNodes.length} nodes at Y=${yPosition}, starting X=${startX}`
+    );
+
+    genNodes.forEach((node, index) => {
+      const xPos = startX + index * minNodeSpacing;
+
+      positionedNodes.push({
+        ...node,
+        position: { x: xPos, y: yPosition },
+      });
+
+      console.log(
+        `  ${index + 1}. ${node.data?.label}: (${xPos}, ${yPosition})`
+      );
+    });
+  });
+
+  console.log("Total positioned nodes:", positionedNodes.length);
+  return positionedNodes;
 };
 
 const calculateCircularLayout = (nodes: any[]) => {
-  const radius = Math.max(300, nodes.length * 50); // Increased radius for more spacing
-  const centerX = 600;
-  const centerY = 350;
+  const radius = Math.max(400, nodes.length * 60); // Larger radius for more spacing
+  const centerX = 800;
+  const centerY = 450;
 
-  console.log("Calculating circular layout for nodes:", nodes.length); // Debug log
+  console.log("Calculating circular layout for nodes:", nodes.length);
 
   return nodes.map((node, index) => {
     const angle = (index * 2 * Math.PI) / nodes.length;
@@ -117,7 +385,7 @@ const calculateCircularLayout = (nodes: any[]) => {
       y: centerY + radius * Math.sin(angle),
     };
 
-    console.log(`Circular node ${index} positioned at:`, position); // Debug log
+    console.log(`Circular node ${index} positioned at:`, position);
 
     return {
       ...node,
@@ -170,42 +438,73 @@ const FamilyTreeVisualization: React.FC = () => {
               label: node.data.label,
               isCurrentUserFamily: node.data.isCurrentUserFamily,
               isCentralNode: node.data.isCentralNode,
+              generation: node.data.generation,
+              relationshipToCentral: node.data.relationshipToCentral,
+              relationshipDisplayName: node.data.relationshipDisplayName,
             },
             draggable: true,
           }));
 
-          const flowEdges = data.treeStructure.edges.map((edge) => ({
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            label: edge.label,
-            type: "smoothstep",
-            animated: false,
-            style: {
-              stroke: "#6B7280",
-              strokeWidth: 2,
-            },
-            labelStyle: {
-              fontSize: 13,
-              fontWeight: 700,
-              fill: "#1F2937",
-              fontFamily: "Inter, system-ui, sans-serif",
-              textShadow: "0 1px 2px rgba(255, 255, 255, 0.8)",
-            },
-            labelBgStyle: {
-              fill: "rgba(255, 255, 255, 0.95)",
-              fillOpacity: 0.95,
-              rx: 12,
-              ry: 12,
-              stroke: "#D1D5DB",
-              strokeWidth: 1.5,
-            },
-          }));
+          // Create simple parent-child edges only
+          const nodeIds = flowNodes.map((n) => n.id);
+          console.log("📦 Node IDs:", nodeIds);
+          console.log(
+            "📦 Edges:",
+            data.treeStructure.edges.map((e) => ({
+              id: e.id,
+              label: e.label,
+              source: e.source,
+              target: e.target,
+            }))
+          );
 
-          // Set nodes and edges directly from backend
-          console.log("Using backend calculated positions:", flowNodes); // Debug log
-          console.log("Using backend styled edges:", flowEdges); // Debug log
-          setNodes(flowNodes);
+          // Filter to show only parent→child relationships (not child→parent)
+          const flowEdges = data.treeStructure.edges
+            .filter((edge) => {
+              // Only show edges where parent points to child (label === "parent" means source is parent of target)
+              const isParentToChild = edge.label === "parent";
+              const sourceExists = nodeIds.includes(edge.source);
+              const targetExists = nodeIds.includes(edge.target);
+
+              if (isParentToChild && (!sourceExists || !targetExists)) {
+                console.error(
+                  `❌ Missing node for edge: ${edge.source} -> ${edge.target} (${edge.label})`
+                );
+              }
+
+              return isParentToChild && sourceExists && targetExists;
+            })
+            .map((edge) => {
+              return {
+                id: edge.id,
+                source: edge.source,
+                target: edge.target,
+                type: "step", // Step edges for rectangular hierarchy
+                sourceHandle: "bottom", // Connect from bottom of parent
+                targetHandle: "top", // Connect to top of child
+                animated: false,
+                style: {
+                  stroke: "#6366f1",
+                  strokeWidth: 2,
+                },
+              };
+            });
+
+          console.log("✅ Valid edges:", flowEdges.length);
+
+          // Apply frontend layout algorithm to position nodes by generation
+          console.log("Applying hierarchical layout based on generations...");
+          const layoutedNodes = calculateTreeLayout(
+            flowNodes,
+            viewMode,
+            flowEdges
+          );
+
+          console.log(
+            "Using hierarchical view with parent-child edges:",
+            flowEdges.length
+          ); // Debug log
+          setNodes(layoutedNodes);
           setEdges(flowEdges);
         } else if (data.familyMembers && data.familyMembers.length > 0) {
           // Fallback: Create nodes directly from family members when no tree structure exists
@@ -370,7 +669,7 @@ const FamilyTreeVisualization: React.FC = () => {
 
       {/* React Flow Container */}
       <div
-        className="relative"
+        className="relative overflow-auto"
         style={{ height: "calc(100vh - 120px)", width: "100%" }}
       >
         <ReactFlow
