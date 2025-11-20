@@ -12,6 +12,7 @@ import ReactFlow, {
   useReactFlow,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import jsPDF from "jspdf";
 
 import { FamilyTreeData } from "../../types";
 import { relationshipsAPI } from "../../services/api";
@@ -32,6 +33,119 @@ import {
 
 const nodeTypes: NodeTypes = {
   familyMember: FamilyMemberNode,
+};
+
+// Inner component that has access to ReactFlow instance
+const FlowControls: React.FC<{ onExport: () => void }> = ({ onExport }) => {
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+
+  const handleZoomIn = () => {
+    zoomIn({ duration: 300 });
+  };
+
+  const handleZoomOut = () => {
+    zoomOut({ duration: 300 });
+  };
+
+  const handleFitView = () => {
+    fitView({ padding: 0.2, duration: 300 });
+  };
+
+  return (
+    <ExportControls
+      onExport={onExport}
+      onZoomIn={handleZoomIn}
+      onZoomOut={handleZoomOut}
+      onFitView={handleFitView}
+    />
+  );
+};
+
+// Export Controls Component (must be inside ReactFlow)
+const ExportControls: React.FC<{
+  onExport: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFitView: () => void;
+}> = ({ onExport, onZoomIn, onZoomOut, onFitView }) => {
+  return (
+    <Panel position="top-right" className="space-y-2">
+      <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-2 space-y-1">
+        {/* Desktop View - Full buttons with text */}
+        <div className="hidden md:block space-y-1">
+          <button
+            onClick={onZoomIn}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ZoomIn className="w-4 h-4" />
+            Zoom In
+          </button>
+          <button
+            onClick={onZoomOut}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ZoomOut className="w-4 h-4" />
+            Zoom Out
+          </button>
+          <button
+            onClick={onFitView}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Maximize2 className="w-4 h-4" />
+            Fit View
+          </button>
+          <hr className="border-gray-200" />
+          <button
+            onClick={onExport}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export as PDF
+          </button>
+          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+            <Share2 className="w-4 h-4" />
+            Share
+          </button>
+        </div>
+
+        {/* Mobile View - Compact icon-only buttons in grid */}
+        <div className="md:hidden grid grid-cols-2 gap-1">
+          <button
+            onClick={onZoomIn}
+            className="flex flex-col items-center justify-center p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-5 h-5" />
+            <span className="text-xs mt-1">Zoom+</span>
+          </button>
+          <button
+            onClick={onZoomOut}
+            className="flex flex-col items-center justify-center p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-5 h-5" />
+            <span className="text-xs mt-1">Zoom-</span>
+          </button>
+          <button
+            onClick={onFitView}
+            className="flex flex-col items-center justify-center p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Fit View"
+          >
+            <Maximize2 className="w-5 h-5" />
+            <span className="text-xs mt-1">Fit</span>
+          </button>
+          <button
+            onClick={onExport}
+            className="flex flex-col items-center justify-center p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Export as PDF"
+          >
+            <Download className="w-5 h-5" />
+            <span className="text-xs mt-1">PDF</span>
+          </button>
+        </div>
+      </div>
+    </Panel>
+  );
 };
 
 // Layout calculation functions
@@ -407,6 +521,101 @@ const FamilyTreeVisualization: React.FC = () => {
     useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0); // Force reload trigger
 
+  // Export tree as PDF function
+  const exportTreeAsPDF = async () => {
+    try {
+      // Get the ReactFlow viewport element
+      const viewport = document.querySelector(
+        ".react-flow__viewport"
+      ) as HTMLElement;
+      if (!viewport) {
+        console.error("Viewport not found");
+        alert("Please wait for the tree to load before exporting.");
+        return;
+      }
+
+      // Get the container element
+      const container = document.querySelector(".react-flow") as HTMLElement;
+      if (!container) {
+        console.error("Container not found");
+        return;
+      }
+
+      // Create a temporary container to capture the tree
+      const clonedViewport = viewport.cloneNode(true) as HTMLElement;
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "-9999px";
+      tempContainer.style.width = `${viewport.scrollWidth}px`;
+      tempContainer.style.height = `${viewport.scrollHeight}px`;
+      tempContainer.style.background = "white";
+      tempContainer.appendChild(clonedViewport);
+      document.body.appendChild(tempContainer);
+
+      // Wait for fonts and styles to load
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Use html2canvas to capture the viewport
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(tempContainer, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+      });
+
+      // Remove temporary container
+      document.body.removeChild(tempContainer);
+
+      // Convert canvas to image
+      const imgData = canvas.toDataURL("image/png");
+
+      // Create PDF with proper dimensions
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      // Calculate PDF dimensions (A4 landscape or custom based on content)
+      const pdfWidth = imgWidth > imgHeight ? 297 : 210; // A4 dimensions in mm
+      const pdfHeight = imgWidth > imgHeight ? 210 : 297;
+
+      // Calculate scaling to fit content
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const scaledWidth = imgWidth * ratio;
+      const scaledHeight = imgHeight * ratio;
+
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: imgWidth > imgHeight ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      // Add image to PDF
+      pdf.addImage(
+        imgData,
+        "PNG",
+        (pdfWidth - scaledWidth) / 2,
+        (pdfHeight - scaledHeight) / 2,
+        scaledWidth,
+        scaledHeight
+      );
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split("T")[0];
+      const filename = `family-tree-${timestamp}.pdf`;
+
+      // Save PDF
+      pdf.save(filename);
+
+      console.log("PDF exported successfully");
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      alert("Failed to export PDF. Please try again.");
+    }
+  };
+
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
@@ -606,10 +815,11 @@ const FamilyTreeVisualization: React.FC = () => {
   }
 
   return (
-    <div className="h-full bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-      {/* Modern Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex flex-col">
+      {/* Compact Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 p-3 md:p-4 flex-shrink-0">
+        {/* Desktop Layout */}
+        <div className="hidden md:flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
               <TreePine className="w-5 h-5 text-white" />
@@ -622,56 +832,80 @@ const FamilyTreeVisualization: React.FC = () => {
               </p>
             </div>
           </div>
+
+          {/* View Mode Controls - Desktop */}
+          <div className="flex items-center gap-3">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              {[
+                { key: "tree", label: "Tree", icon: TreePine },
+                { key: "generation", label: "Generations", icon: Users },
+                { key: "circular", label: "Circle", icon: Layout },
+              ].map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setViewMode(key as any)}
+                  className={`
+                    flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
+                    ${
+                      viewMode === key
+                        ? "bg-white text-indigo-600 shadow-md"
+                        : "text-gray-600 hover:text-indigo-600"
+                    }
+                  `}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* View Mode Controls */}
-        <div className="flex items-center gap-3">
-          <div className="flex bg-gray-100 rounded-lg p-1">
+        {/* Mobile Layout */}
+        <div className="md:hidden space-y-3">
+          {/* Title and Stats */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <TreePine className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Family Tree</h2>
+              <p className="text-xs text-gray-600">
+                {treeData?.stats.totalMembers || 0} members •{" "}
+                {treeData?.stats.totalRelationships || 0} connections
+              </p>
+            </div>
+          </div>
+
+          {/* View Mode Controls - Mobile (Icon only) */}
+          <div className="flex bg-gray-100 rounded-lg p-1 w-full">
             {[
               { key: "tree", label: "Tree", icon: TreePine },
-              { key: "generation", label: "Generations", icon: Users },
+              { key: "generation", label: "Gens", icon: Users },
               { key: "circular", label: "Circle", icon: Layout },
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setViewMode(key as any)}
                 className={`
-                  flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
+                  flex-1 flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-all
                   ${
                     viewMode === key
                       ? "bg-white text-indigo-600 shadow-md"
-                      : "text-gray-600 hover:text-indigo-600"
+                      : "text-gray-600"
                   }
                 `}
               >
                 <Icon className="w-4 h-4" />
-                {label}
+                <span>{label}</span>
               </button>
             ))}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl">
-              <Plus className="w-4 h-4" />
-              Add Member
-            </button>
-            <button
-              onClick={() => setShowAddRelationshipModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl"
-            >
-              <Link2 className="w-4 h-4" />
-              Add Relationship
-            </button>
           </div>
         </div>
       </div>
 
       {/* React Flow Container */}
-      <div
-        className="relative overflow-auto"
-        style={{ height: "calc(100vh - 120px)", width: "100%" }}
-      >
+      <div className="flex-1 relative overflow-auto">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -696,31 +930,7 @@ const FamilyTreeVisualization: React.FC = () => {
           elementsSelectable={true}
         >
           {/* Custom Controls */}
-          <Panel position="top-right" className="space-y-2">
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-2 space-y-1">
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <ZoomIn className="w-4 h-4" />
-                Zoom In
-              </button>
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <ZoomOut className="w-4 h-4" />
-                Zoom Out
-              </button>
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <Maximize2 className="w-4 h-4" />
-                Fit View
-              </button>
-              <hr className="border-gray-200" />
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <Download className="w-4 h-4" />
-                Export
-              </button>
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <Share2 className="w-4 h-4" />
-                Share
-              </button>
-            </div>
-          </Panel>
+          <FlowControls onExport={exportTreeAsPDF} />
 
           <Controls
             position="bottom-right"

@@ -65,6 +65,8 @@ export const familyAPI = {
 
   getMember: (id: string) => api.get(`/family/members/${id}`),
 
+  getStats: () => api.get("/family/stats"),
+
   addMember: (memberData: {
     firstName: string;
     lastName: string;

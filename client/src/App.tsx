@@ -9,11 +9,12 @@ import { AuthProvider } from "./context/AuthContext";
 import { useAuth } from "./context/AuthContext";
 import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
-import Dashboard from "./components/dashboard/Dashboard";
+import Dashboard from "./components/dashboard/Dashboard_Enhanced";
 import FamilyTreeVisualization from "./components/family-tree/FamilyTreeVisualization";
 import AddFamilyMember from "./components/family-management/AddFamilyMember";
 import ConnectionsHub from "./components/connections/ConnectionsHub";
 import Suggestions from "./pages/Suggestions";
+import Layout from "./components/layout/Layout";
 import "./App.css";
 
 // Protected Route Component
@@ -81,7 +82,9 @@ function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <Layout>
+                    <Dashboard />
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -89,7 +92,9 @@ function App() {
               path="/family-tree"
               element={
                 <ProtectedRoute>
-                  <FamilyTreeVisualization />
+                  <Layout>
+                    <FamilyTreeVisualization />
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -97,7 +102,9 @@ function App() {
               path="/add-member"
               element={
                 <ProtectedRoute>
-                  <AddFamilyMember />
+                  <Layout>
+                    <AddFamilyMember />
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -105,7 +112,9 @@ function App() {
               path="/connections"
               element={
                 <ProtectedRoute>
-                  <ConnectionsHub />
+                  <Layout>
+                    <ConnectionsHub />
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -113,7 +122,9 @@ function App() {
               path="/suggestions"
               element={
                 <ProtectedRoute>
-                  <Suggestions />
+                  <Layout>
+                    <Suggestions />
+                  </Layout>
                 </ProtectedRoute>
               }
             />

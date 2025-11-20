@@ -17,6 +17,10 @@ import {
   Camera,
   UserPlus,
   Lightbulb,
+  TrendingUp,
+  Activity,
+  Award,
+  Sparkles,
 } from "lucide-react";
 
 const Dashboard: React.FC = () => {
@@ -30,10 +34,23 @@ const Dashboard: React.FC = () => {
     generations: 0,
     recentAdditions: 0,
   });
+  const [greeting, setGreeting] = useState("");
+  const [animateStats, setAnimateStats] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
+    setGreetingMessage();
+    // Trigger stat animations after a brief delay
+    setTimeout(() => setAnimateStats(true), 100);
   }, []);
+
+  const setGreetingMessage = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting("Good Morning");
+    else if (hour < 17) setGreeting("Good Afternoon");
+    else if (hour < 22) setGreeting("Good Evening");
+    else setGreeting("Good Night");
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -88,45 +105,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      {/* Navigation Header */}
-      <nav className="bg-white/80 backdrop-blur-md shadow-lg border-b border-white/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 rounded-xl">
-                <TreePine className="h-8 w-8 text-white" />
-              </div>
-              <div className="ml-3">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  Porompora
-                </h1>
-                <p className="text-xs text-gray-500 font-medium">
-                  Connecting Dots
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-3 bg-white/50 px-4 py-2 rounded-full border border-white/30">
-                <div className="w-8 h-8 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-700">
-                  {user?.firstName} {user?.lastName}
-                </span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center space-x-2 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 px-4 py-2 rounded-xl transition-all duration-200 border border-red-200 hover:border-red-300"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="font-medium">Logout</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Welcome Section */}

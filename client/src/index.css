@@ -32,6 +32,27 @@ code {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* Animation delay utilities */
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-400 {
+  animation-delay: 400ms;
+}
+
+.animation-delay-600 {
+  animation-delay: 600ms;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
 /* React Flow custom styles */
 .react-flow__node-familyMember.selected {
   border-color: #6366f1;

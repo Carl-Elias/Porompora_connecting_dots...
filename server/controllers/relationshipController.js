@@ -295,6 +295,14 @@ const getFamilyTree = async (req, res) => {
     const userId = req.user._id;
     const { rootPersonId } = req.query;
 
+    // Get the logged-in user's Person record
+    const User = require("../models/User");
+    const loggedInUser = await User.findById(userId);
+    const userPersonId = loggedInUser?.personId;
+
+    console.log(`\n🔐 Logged-in User ID: ${userId}`);
+    console.log(`👤 User's Person ID: ${userPersonId || "Not set"}`);
+
     // Get all family members added by this user
     const familyMembers = await Person.find({ addedBy: userId });
 
@@ -425,6 +433,219 @@ const getFamilyTree = async (req, res) => {
       userId
     );
 
+    // Calculate generations from the logged-in user's perspective
+    // Traverse upward (to ancestors) and downward (to descendants) from the user
+    const calculateGenerations = (persons, relationships, userPersonId) => {
+      if (persons.length === 0) return 0;
+      if (relationships.length === 0) {
+        // Fallback: use birth years if no relationships
+        const birthYears = persons
+          .filter((p) => p.dateOfBirth)
+          .map((p) => new Date(p.dateOfBirth).getFullYear());
+
+        if (birthYears.length === 0) return 1;
+        const minYear = Math.min(...birthYears);
+        const maxYear = Math.max(...birthYears);
+        return Math.max(1, Math.ceil((maxYear - minYear) / 25));
+      }
+
+      const generationLevels = new Map();
+
+      // Find parent-child relationships
+      const parentChildRels = relationships.filter(
+        (rel) =>
+          rel.relationshipType === "parent" ||
+          rel.relationshipType === "father" ||
+          rel.relationshipType === "mother" ||
+          rel.relationshipType === "child"
+      );
+
+      console.log(
+        `🔍 Parent-child relationships found: ${parentChildRels.length}`
+      );
+
+      if (parentChildRels.length === 0) {
+        // No parent-child relationships, fallback to birth years
+        const birthYears = persons
+          .filter((p) => p.dateOfBirth)
+          .map((p) => new Date(p.dateOfBirth).getFullYear());
+
+        if (birthYears.length === 0) return 1;
+        const minYear = Math.min(...birthYears);
+        const maxYear = Math.max(...birthYears);
+        return Math.max(1, Math.ceil((maxYear - minYear) / 25));
+      }
+
+      // Start from the oldest ancestor (person with no parents in the tree)
+      const personIds = new Set(persons.map((p) => p._id.toString()));
+      const childrenMap = new Map(); // parent -> children
+      const parentsMap = new Map(); // child -> parents
+
+      // Build parent-child maps - handle BOTH directions
+      parentChildRels.forEach((rel) => {
+        const type = rel.relationshipType;
+        let parentId, childId;
+
+        // Determine parent and child based on relationship type
+        if (type === "parent" || type === "father" || type === "mother") {
+          // person1 is parent, person2 is child
+          parentId = rel.person1._id.toString();
+          childId = rel.person2._id.toString();
+        } else if (type === "child") {
+          // person1 is child, person2 is parent
+          childId = rel.person1._id.toString();
+          parentId = rel.person2._id.toString();
+        }
+
+        if (parentId && childId) {
+          if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+          if (!childrenMap.get(parentId).includes(childId)) {
+            childrenMap.get(parentId).push(childId);
+          }
+
+          if (!parentsMap.has(childId)) parentsMap.set(childId, []);
+          if (!parentsMap.get(childId).includes(parentId)) {
+            parentsMap.get(childId).push(parentId);
+          }
+        }
+      });
+
+      console.log(`👶 Children map size: ${childrenMap.size}`);
+      console.log(`👨 Parents map size: ${parentsMap.size}`);
+
+      // Find root ancestors (people with no parents in the tree)
+      const roots = [];
+      persons.forEach((p) => {
+        const pId = p._id.toString();
+        if (!parentsMap.has(pId) || parentsMap.get(pId).length === 0) {
+          roots.push(pId);
+        }
+      });
+
+      console.log(`🌳 Found ${roots.length} root ancestors (no parents)`);
+      console.log(
+        `🔗 Total parent-child relationships: ${parentChildRels.length}`
+      );
+      console.log(`👥 Total persons in tree: ${persons.length}`);
+
+      // Start BFS from the logged-in user's person, not from tree roots
+      // This gives us generations relative to the current user
+      let startPersonId = userPersonId;
+
+      // If user's person ID is not provided, fall back to first family member or oldest root
+      if (!startPersonId || !personIds.has(startPersonId)) {
+        if (roots.length > 0) {
+          startPersonId = roots[0];
+        } else if (persons.length > 0) {
+          startPersonId = persons[0]._id.toString();
+        }
+      }
+
+      console.log(
+        `👤 Calculating generations from user's perspective: ${startPersonId}`
+      );
+
+      // STEP 1: Calculate depth to furthest ancestor (going UPWARD only)
+      let maxAncestorDepth = 0;
+      const ancestorQueue = [{ id: startPersonId, depth: 0 }];
+      const ancestorVisited = new Set();
+
+      while (ancestorQueue.length > 0) {
+        const { id, depth } = ancestorQueue.shift();
+        if (ancestorVisited.has(id)) continue;
+        ancestorVisited.add(id);
+
+        maxAncestorDepth = Math.max(maxAncestorDepth, depth);
+
+        // Go upward to parents
+        const parents = parentsMap.get(id) || [];
+        parents.forEach((parentId) => {
+          if (!ancestorVisited.has(parentId)) {
+            ancestorQueue.push({ id: parentId, depth: depth + 1 });
+          }
+        });
+      }
+
+      console.log(
+        `⬆️  Max ancestor depth: ${maxAncestorDepth} (going upward from user)`
+      );
+
+      // STEP 2: Calculate depth to furthest descendant (going DOWNWARD only)
+      let maxDescendantDepth = 0;
+      const descendantQueue = [{ id: startPersonId, depth: 0 }];
+      const descendantVisited = new Set();
+
+      while (descendantQueue.length > 0) {
+        const { id, depth } = descendantQueue.shift();
+        if (descendantVisited.has(id)) continue;
+        descendantVisited.add(id);
+
+        maxDescendantDepth = Math.max(maxDescendantDepth, depth);
+
+        // Go downward to children
+        const children = childrenMap.get(id) || [];
+        children.forEach((childId) => {
+          if (!descendantVisited.has(childId)) {
+            descendantQueue.push({ id: childId, depth: depth + 1 });
+          }
+        });
+      }
+
+      console.log(
+        `⬇️  Max descendant depth: ${maxDescendantDepth} (going downward from user)`
+      );
+
+      // Total generations = ancestors + user + descendants
+      const generationSpan = maxAncestorDepth + 1 + maxDescendantDepth;
+
+      console.log(`📊 Total persons in family tree: ${persons.length}`);
+      console.log(
+        `📏 Ancestor depth: ${maxAncestorDepth}, Descendant depth: ${maxDescendantDepth}, User: 1`
+      );
+      console.log(
+        `🎯 Total generations: ${maxAncestorDepth} + 1 + ${maxDescendantDepth} = ${generationSpan}`
+      );
+
+      return generationSpan;
+    };
+
+    // Find the logged-in user's person ID for generation calculation
+    // Priority: 1) User's personId field, 2) Person with associatedUserId, 3) First family member
+    let userPersonForGenCalc = userPersonId?.toString();
+
+    if (!userPersonForGenCalc) {
+      // Try to find by associatedUserId
+      const personByAssoc = allConnectedPersons.find(
+        (p) => p.associatedUserId && p.associatedUserId.toString() === userId
+      );
+      userPersonForGenCalc = personByAssoc?._id.toString();
+    }
+
+    if (!userPersonForGenCalc && familyMembers.length > 0) {
+      // Fallback to first family member
+      userPersonForGenCalc = familyMembers[0]._id.toString();
+    }
+
+    if (!userPersonForGenCalc && allConnectedPersons.length > 0) {
+      // Final fallback to central person
+      userPersonForGenCalc = centralPersonId;
+    }
+
+    console.log(
+      `👤 User Person ID for generation calculation: ${userPersonForGenCalc}`
+    );
+    console.log(`   Method: ${userPersonId ? "User.personId" : "Fallback"}`);
+
+    const generations = calculateGenerations(
+      allConnectedPersons,
+      allRelationships,
+      userPersonForGenCalc
+    );
+
+    console.log(`\n✅ FINAL STATS:`);
+    console.log(`   Total Members: ${allConnectedPersons.length}`);
+    console.log(`   Generations: ${generations}`);
+
     res.json({
       success: true,
       data: {
@@ -438,6 +659,7 @@ const getFamilyTree = async (req, res) => {
           totalRelationships: relationships.length,
           ownMembers: familyMembers.length, // Track user's own family members
           connectedMembers: allConnectedPersons.length - familyMembers.length, // Cross-user connections
+          generations: generations, // Calculated generations
         },
       },
     });
