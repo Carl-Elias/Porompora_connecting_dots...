@@ -14,6 +14,7 @@ import FamilyTreeVisualization from "./components/family-tree/FamilyTreeVisualiz
 import AddFamilyMember from "./components/family-management/AddFamilyMember";
 import ConnectionsHub from "./components/connections/ConnectionsHub";
 import Suggestions from "./pages/Suggestions";
+import ProfilePage from "./components/profile/ProfilePage";
 import Layout from "./components/layout/Layout";
 import "./App.css";
 
@@ -124,6 +125,26 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Suggestions />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ProfilePage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile/:userId"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ProfilePage />
                   </Layout>
                 </ProtectedRoute>
               }

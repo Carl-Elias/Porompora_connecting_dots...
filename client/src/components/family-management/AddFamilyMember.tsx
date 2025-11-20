@@ -9,7 +9,6 @@ import {
   Briefcase,
   GraduationCap,
   FileText,
-  Camera,
   X,
   Save,
   ArrowLeft,

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position } from "reactflow";
+import { useNavigate } from "react-router-dom";
 import { Person } from "../../types";
 import { User, Calendar, MapPin, Briefcase, Heart, Eye } from "lucide-react";
 
@@ -28,6 +29,14 @@ const FamilyMemberNode: React.FC<FamilyMemberNodeProps> = ({
     relationshipDisplayName = null,
   } = data;
   const [isHovered, setIsHovered] = useState(false);
+  const navigate = useNavigate();
+
+  const handleViewProfile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Navigate to profile using associatedUserId if available, otherwise use person _id
+    const profileId = person.associatedUserId || person._id;
+    navigate(`/profile/${profileId}`);
+  };
 
   const getAgeFromBirthDate = (birthDate: string) => {
     const today = new Date();
@@ -184,9 +193,13 @@ const FamilyMemberNode: React.FC<FamilyMemberNodeProps> = ({
 
         {/* Hover Actions */}
         {isHovered && (
-          <div className="absolute -top-2 -right-2 bg-indigo-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-fade-in">
+          <button
+            onClick={handleViewProfile}
+            className="absolute -top-2 -right-2 bg-indigo-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-fade-in hover:bg-indigo-600 transition-colors cursor-pointer"
+            title="View Profile"
+          >
             <Eye className="w-3 h-3" />
-          </div>
+          </button>
         )}
       </div>
 

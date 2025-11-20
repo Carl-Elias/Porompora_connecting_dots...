@@ -115,6 +115,57 @@ const personSchema = new mongoose.Schema(
       },
     ],
 
+    // Life Story - Important moments and memories
+    lifeStories: [
+      {
+        title: {
+          type: String,
+          required: true,
+        },
+        description: String,
+        date: Date, // When the event happened
+        category: {
+          type: String,
+          enum: [
+            "birth",
+            "education",
+            "career",
+            "marriage",
+            "children",
+            "achievement",
+            "travel",
+            "milestone",
+            "memory",
+            "other",
+          ],
+          default: "memory",
+        },
+        location: String,
+        photos: [
+          {
+            url: String,
+            caption: String,
+          },
+        ],
+        isPublic: {
+          type: Boolean,
+          default: true,
+        },
+        addedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+        updatedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+
     // Professional Information
     occupation: String,
     education: String,
@@ -193,3 +244,7 @@ personSchema.statics.findPublicPersons = function (searchQuery) {
 };
 
 module.exports = mongoose.model("Person", personSchema);
+
+
+
+

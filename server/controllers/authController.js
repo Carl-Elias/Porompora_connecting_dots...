@@ -67,6 +67,8 @@ const register = async (req, res) => {
       firstName,
       lastName,
       phoneNumber,
+      gender,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
     });
 
     const savedUser = await user.save();
@@ -116,6 +118,7 @@ const register = async (req, res) => {
           phoneNumber: savedUser.phoneNumber,
           isEmailVerified: savedUser.isEmailVerified,
           personId: savedUser.personId,
+          profilePicture: savedUser.profilePicture,
         },
         token,
       },
@@ -193,6 +196,7 @@ const login = async (req, res) => {
           isEmailVerified: user.isEmailVerified,
           lastLoginAt: user.lastLoginAt,
           personId: user.personId,
+          profilePicture: user.profilePicture,
         },
         token,
       },

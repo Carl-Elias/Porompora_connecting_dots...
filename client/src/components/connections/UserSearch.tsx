@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Search, UserPlus, MapPin, Eye } from "lucide-react";
-import { usersAPI } from "../../services/api";
+import { usersAPI, profileAPI } from "../../services/api";
 
 interface User {
   _id: string;
@@ -66,8 +66,8 @@ const UserSearch: React.FC<UserSearchProps> = ({
 
   const handleViewProfile = async (user: User) => {
     try {
-      const response = await usersAPI.getUserProfile(user._id);
-      setSelectedUser(response.data.user);
+      const response = await profileAPI.getUserProfile(user._id);
+      setSelectedUser(response.data.data.user);
       setIsModalOpen(true);
     } catch (err) {
       setError("Failed to load user profile");

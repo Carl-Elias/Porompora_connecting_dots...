@@ -88,17 +88,30 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             {/* Desktop User Profile - Hidden on Mobile */}
             <div className="hidden md:flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                {user?.firstName?.charAt(0) || "U"}
-              </div>
-              <div className="hidden lg:block">
-                <p className="font-medium text-gray-900 text-sm">
-                  {user?.firstName} {user?.lastName}
-                </p>
-              </div>
+              <Link
+                to="/profile"
+                className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer group"
+              >
+                {user?.profilePicture?.url ? (
+                  <img
+                    src={user.profilePicture.url}
+                    alt={`${user.firstName} ${user.lastName}`}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 group-hover:border-indigo-400 group-hover:shadow-lg transition-all"
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold group-hover:shadow-lg transition-shadow">
+                    {user?.firstName?.charAt(0) || "U"}
+                  </div>
+                )}
+                <div className="hidden lg:block">
+                  <p className="font-medium text-gray-900 text-sm group-hover:text-indigo-600 transition-colors">
+                    {user?.firstName} {user?.lastName}
+                  </p>
+                </div>
+              </Link>
               <button
                 onClick={handleLogout}
-                className="ml-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="ml-2 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 title="Logout"
               >
                 <LogOut className="w-5 h-5" />
@@ -123,17 +136,30 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white">
             <div className="px-4 py-3 space-y-1">
-              {/* User Info */}
-              <div className="flex items-center gap-3 pb-3 mb-3 border-b border-gray-200">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                  {user?.firstName?.charAt(0) || "U"}
-                </div>
+              {/* User Info - Now clickable */}
+              <Link
+                to="/profile"
+                onClick={closeMobileMenu}
+                className="flex items-center gap-3 pb-3 mb-3 border-b border-gray-200 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
+              >
+                {user?.profilePicture?.url ? (
+                  <img
+                    src={user.profilePicture.url}
+                    alt={`${user.firstName} ${user.lastName}`}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
+                    {user?.firstName?.charAt(0) || "U"}
+                  </div>
+                )}
                 <div>
                   <p className="font-medium text-gray-900 text-sm">
                     {user?.firstName} {user?.lastName}
                   </p>
+                  <p className="text-xs text-gray-500">View Profile</p>
                 </div>
-              </div>
+              </Link>
 
               {/* Navigation Links */}
               {navItems.map((item) => {

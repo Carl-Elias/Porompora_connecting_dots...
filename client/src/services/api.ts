@@ -121,8 +121,6 @@ export const usersAPI = {
       )}&page=${page}&limit=${limit}`
     ),
 
-  getUserProfile: (userId: string) => api.get(`/users/${userId}/profile`),
-
   getPrivacySettings: () => api.get("/users/privacy-settings"),
 
   updatePrivacySettings: (settings: any) =>
@@ -185,6 +183,73 @@ export const suggestionAPI = {
 
   bulkDismiss: (suggestionIds: string[], reason?: string) =>
     api.post("/suggestions/bulk/dismiss", { suggestionIds, reason }),
+};
+
+// Profile API
+export const profileAPI = {
+  getProfile: () => api.get("/profile"),
+
+  getUserProfile: (userId: string) => api.get(`/profile/${userId}`),
+
+  updateProfile: (profileData: {
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string;
+    bio?: string;
+    location?: string;
+    dateOfBirth?: string;
+    gender?: string;
+  }) => api.put("/profile", profileData),
+
+  uploadProfilePicture: (url: string) => api.post("/profile/picture", { url }),
+
+  updatePrivacySettings: (settings: {
+    defaultPrivacyLevel?: string;
+    allowDiscovery?: boolean;
+  }) => api.put("/profile/privacy", settings),
+
+  updateNotificationPreferences: (preferences: {
+    connectionRequests?: boolean;
+    relationshipSuggestions?: boolean;
+    familyAdditions?: boolean;
+    storyComments?: boolean;
+  }) => api.put("/profile/notifications", preferences),
+
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.put("/profile/password", data),
+
+  getUserStats: () => api.get("/profile/stats"),
+};
+
+// Life Story API
+export const lifeStoryAPI = {
+  getLifeStories: (userId?: string) =>
+    userId ? api.get(`/life-story/user/${userId}`) : api.get("/life-story"),
+
+  addLifeStory: (storyData: {
+    title: string;
+    description?: string;
+    date?: string;
+    category?: string;
+    location?: string;
+    photos?: Array<{ url: string; caption?: string }>;
+    isPublic?: boolean;
+  }) => api.post("/life-story", storyData),
+
+  updateLifeStory: (
+    storyId: string,
+    storyData: {
+      title?: string;
+      description?: string;
+      date?: string;
+      category?: string;
+      location?: string;
+      photos?: Array<{ url: string; caption?: string }>;
+      isPublic?: boolean;
+    }
+  ) => api.put(`/life-story/${storyId}`, storyData),
+
+  deleteLifeStory: (storyId: string) => api.delete(`/life-story/${storyId}`),
 };
 
 export default api;

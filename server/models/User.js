@@ -35,6 +35,28 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Extended profile information
+    bio: {
+      type: String,
+      maxlength: 500,
+      trim: true,
+    },
+    location: {
+      type: String,
+      trim: true,
+    },
+    dateOfBirth: {
+      type: Date,
+    },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other", "prefer_not_to_say"],
+    },
+    profilePicture: {
+      url: String,
+      uploadedAt: Date,
+    },
+
     // User's own person record in the family tree
     personId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -63,6 +85,14 @@ const userSchema = new mongoose.Schema(
     allowDiscovery: {
       type: Boolean,
       default: true, // Allow others to find this user
+    },
+
+    // Notification preferences
+    notificationPreferences: {
+      connectionRequests: { type: Boolean, default: true },
+      relationshipSuggestions: { type: Boolean, default: true },
+      familyAdditions: { type: Boolean, default: true },
+      storyComments: { type: Boolean, default: false },
     },
 
     // Account status

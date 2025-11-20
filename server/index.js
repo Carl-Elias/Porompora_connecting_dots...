@@ -37,6 +37,8 @@ app.use("/api/relationships", require("./routes/relationships"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/connections", require("./routes/connections"));
 app.use("/api/suggestions", require("./routes/suggestions"));
+app.use("/api/profile", require("./routes/profile"));
+app.use("/api/life-story", require("./routes/lifeStory"));
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

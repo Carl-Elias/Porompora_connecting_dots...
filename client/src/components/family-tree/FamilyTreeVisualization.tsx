@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import ReactFlow, {
   useNodesState,
   useEdgesState,
@@ -21,8 +21,6 @@ import AddRelationshipModal from "./AddRelationshipModal";
 import {
   TreePine,
   Users,
-  Plus,
-  Link2,
   Layout,
   ZoomIn,
   ZoomOut,

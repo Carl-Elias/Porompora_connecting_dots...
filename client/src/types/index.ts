@@ -7,6 +7,10 @@ export interface User {
   isEmailVerified: boolean;
   lastLoginAt: string;
   personId?: string;
+  profilePicture?: {
+    url: string;
+    uploadedAt: string;
+  };
 }
 
 export interface Person {
@@ -136,6 +140,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (userData: RegisterData) => Promise<void>;
   logout: () => void;
+  updateUser: (userData: Partial<User>) => void;
   loading: boolean;
 }
 

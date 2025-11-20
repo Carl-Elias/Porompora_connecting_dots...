@@ -154,6 +154,8 @@ const sanitizeUserInput = (data) => {
   if (data.phoneNumber)
     sanitized.phoneNumber = sanitizeString(data.phoneNumber);
   if (data.password) sanitized.password = data.password; // Don't sanitize password
+  if (data.gender) sanitized.gender = sanitizeString(data.gender);
+  if (data.dateOfBirth) sanitized.dateOfBirth = data.dateOfBirth; // Keep date as-is
 
   return sanitized;
 };
